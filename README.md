@@ -44,7 +44,7 @@ Hello, from Lukes-Macbook-Pro.local! Our config is "" and our secret is ""
 ## Create Docker image
 
 ```Dockerfile
-FROM scratch
+FROM ubuntu
 ADD app .
 ENTRYPOINT ["./app"]
 ```
@@ -61,26 +61,26 @@ ADD failed: stat /var/lib/docker/tmp/docker-builder297947798/app: no such file o
 ```
 
 Ahh, of course we need to compile our app into a binary called `app`.
-If we want to use scratch then we'll need to use golang's `netgo` library
 
 ```
-GOOS=linux go build -tags netgo -installsuffix netgo -o app .
+GOOS=linux go build -o app .
 ```
 
 With our binary built, we can now build our Docker image
 
 ```
 docker build . -t lkysow/gcp-meetup
-Sending build context to Docker daemon   11.7MB
-Step 1/3 : FROM scratch
- --->
+Sending build context to Docker daemon  5.949MB
+Step 1/3 : FROM ubuntu
+ ---> 14f60031763d
 Step 2/3 : ADD app .
- ---> Using cache
- ---> aa39899c492e
+ ---> 6a5687968a97
+Removing intermediate container a13ad906b366
 Step 3/3 : ENTRYPOINT ./app
- ---> Using cache
- ---> 2aebe8f6a1b1
-Successfully built 2aebe8f6a1b1
+ ---> Running in f98f82b03a69
+ ---> 7a83a7a27002
+Removing intermediate container f98f82b03a69
+Successfully built 7a83a7a27002
 Successfully tagged lkysow/gcp-meetup:latest
 ```
 

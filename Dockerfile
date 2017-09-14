@@ -1,3 +1,3 @@
-FROM scratch
+FROM ubuntu
 ADD app .
 ENTRYPOINT ["./app"]
