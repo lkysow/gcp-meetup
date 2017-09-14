@@ -10,6 +10,6 @@ spec:
         app: gcp-meetup
     spec:
       containers:
-      - image: lkysow/gcp-meetup:v2
+      - image: lkysow/gcp-meetup
         name: gcp-meetup
         imagePullPolicy: Always
