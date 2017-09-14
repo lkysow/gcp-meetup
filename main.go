@@ -52,8 +52,12 @@ func main() {
 //func main() {
 //	hostname, _ := os.Hostname()
 //	nodeName := os.Getenv("NODE_NAME")
+//	redisHost := os.Getenv("REDIS")
+//	if redisHost == "" {
+//		redisHost = "redis"
+//	}
 //	client := redis.NewClient(&redis.Options{
-//		Addr: "redis:6379",
+//		Addr: redisHost + ":6379",
 //	})
 //
 //	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

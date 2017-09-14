@@ -348,3 +348,6 @@ kubectl apply -f deployment.yaml
 ```
 
 We should see a rolling deploy succeed and now the count should be the same across pods.
+
+## Persistent Redis
+helm install --name gcp-meetup --set nameOverride=redis --set usePassword=false  stable/redis
