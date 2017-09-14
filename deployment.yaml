@@ -3,26 +3,13 @@ kind: Deployment
 metadata:
   name: gcp-meetup
 spec:
-  replicas: 1
+  replicas: 3
   template:
     metadata:
       labels:
         app: gcp-meetup
     spec:
       containers:
-      - image: lkysow/gcp-meetup
+      - image: lkysow/gcp-meetup:v2
         name: gcp-meetup
-        env:
-        - name: CONFIG
-          valueFrom:
-            configMapKeyRef:
-              name: gcp-meetup
-              key: date
-        # Secret below
-        - name: SECRET
-          valueFrom:
-            secretKeyRef:
-              name: gcp-secret
-              key: password
-        - name: USELESS
-          value: itoldyouso
+        imagePullPolicy: Always

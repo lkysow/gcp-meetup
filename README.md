@@ -1,7 +1,7 @@
 ## Create App
 
 ```go
-// main.go
+// cat main.go
 package main
 
 import (
@@ -12,15 +12,21 @@ import (
 )
 
 var version = "1"
+var count = make(map[string]int)
 
 func main() {
 	hostname, _ := os.Hostname()
 	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, from %s! My version is %s, our config is %q and our secret is %q",
+		greeting := r.URL.Query().Get("greeting")
+
+		// increment the key by one
+		num := count[greeting]
+		count[greeting] = num + 1
+
+		fmt.Fprintf(w, "Hello, from %s!\nI have seen that greeting %d times.\nVersion: %s\n",
 			hostname,
+			num,
 			version,
-			os.Getenv("CONFIG"),
-			os.Getenv("SECRET"),
 		)
 	})
 	log.Println("Starting server...")
@@ -37,13 +43,16 @@ go run main.go
 
 In a new session
 ```
-curl localhost:8080/hello
-Hello, from Lukes-Macbook-Pro.local! Our config is "" and our secret is ""
+curl localhost:8080/hello?greeting=hi
+Hello, from Lukes-Macbook-Pro.local!
+I have seen that greeting 0 times.
+Version: 1
 ```
 
 ## Create Docker image
 
 ```Dockerfile
+# cat Dockerfile
 FROM ubuntu
 ADD app .
 ENTRYPOINT ["./app"]
@@ -93,8 +102,10 @@ docker run -p 8080:8080 lkysow/gcp-meetup
 And test it
 
 ```
-curl localhost:8080/hello
-Hello, from 0bceb5c0aa5f! Our config is "" and our secret is ""%
+curl localhost:8080/hello?greeting=hi
+Hello, from 2f9c7131495c!
+I have seen that greeting 0 times.
+Version: 1
 ```
 
 Now let's push up that image to the Docker registry so Kubernetes can use it
@@ -109,7 +120,7 @@ latest: digest: sha256:8e9925d8cc89a2d853d8bdfb8017eaadcb5de9cb3524484471e1c8eac
 ## Run it in Kubernetes as a Pod
 
 ```
-# pod.yaml
+# cat pod.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -153,129 +164,34 @@ From the debug pod, we should be able to curl our app
 
 ```
 (06:10 debug-870039539-pqdxh:/) curl 10.8.2.6:8080/hello
-Hello, from gcp-meetup! Our config is "" and our secret is ""
+Hello, from gcp-meetup
+I have seen that greeting 0 times.
+Version: 2
 ```
 
 It works!
 
-## ConfigMaps
-
-We want to use the same container image for every environment, but often configuration
-changes per environment. That's where `ConfigMap`'s come in.
-
-```
-# configmap.yaml
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: gcp-meetup
-data:
-  date: sep14
-```
-
-Create it
-
-```
-kubectl apply -f configmap.yaml
-configmap "gcp-meetup" created
-```
-
-Now lets get our pod to use the `ConfigMap` via an environment variable.
-Delete the running pod and create a new one
-
-```
-apiVersion: v1
-kind: Pod
-metadata:
-  name: gcp-meetup
-spec:
-  containers:
-  - image: lkysow/gcp-meetup
-    name: gcp-meetup
-    env:
-    - name: CONFIG
-      valueFrom:
-        configMapKeyRef:
-          # The ConfigMap containing the value you want to assign to SPECIAL_LEVEL_KEY
-          name: gcp-meetup
-          # Specify the key associated with the value
-          key: date
-```
-
-Now when we curl the Pod we should see the date in the response
-
-```
-kubectl attach -it debug-870039539-pqdxh
-If you don't see a command prompt, try pressing enter.
-
-(06:18 debug-870039539-pqdxh:/) curl 10.8.2.8:8080/hello
-Hello, from gcp-meetup! Our config is "sep14" and our secret is ""
-```
-
-## Secrets
-
-Create a secret file on disk
-
-```
-echo hunter2 > secret.txt
-```
-
-Use `kubectl` to create the secret
-```
-kubectl create secret generic gcp-secret --from-file=password=./secret.txt
-secret "gcp-secret" created
-```
-
-Check that it's there
-
-```
-kubectl describe secret gcp-secret
-Name:		gcp-secret
-Namespace:	default
-Labels:		<none>
-Annotations:	<none>
-
-Type:	Opaque
-
-Data
-====
-password:	7 bytes
-```
-
-Note that you can't see the secret unless you use `get -o yaml`
-
-Now let's get the Pod to use the secret as an environment variable
-
-```
-apiVersion: v1
-kind: Pod
-metadata:
-  name: gcp-meetup
-spec:
-  containers:
-  - image: lkysow/gcp-meetup
-    name: gcp-meetup
-    env:
-    - name: CONFIG
-      valueFrom:
-        configMapKeyRef:
-          name: gcp-meetup
-          key: date
-    # Secret below
-    - name: SECRET
-      valueFrom:
-        secretKeyRef:
-          name: gcp-secret
-          key: password
-```
-
-Delete the old Pod, create a new one and see if it worked.
-```
-curl 10.8.2.10:8080/hello
-Hello, from gcp-meetup! Our config is "sep13" and our secret is "hunter2"
-```
-
 ## From Pod to Deployment
+Pods aren't self-healing and we can't run multiple replicas. We need a Deployment.
+
+```
+# cat deployment.yaml
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: gcp-meetup
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: gcp-meetup
+    spec:
+      containers:
+      - image: lkysow/gcp-meetup:v2
+        name: gcp-meetup
+        imagePullPolicy: Always
+```
 
 ```
 kubectl delete pod gcp-meetup
@@ -311,3 +227,111 @@ That's great but we actually want to talk to our app!
 ```
 kubectl apply -f svc.yaml
 ```
+
+Now we can curl our app with the new DNS entry and it will load balance over our Pods.
+
+```
+curl gcp-meetup/hello?greeting=bye
+Hello, from gcp-meetup-1883113546-qc4gz!
+I have seen that greeting 1805 times.
+Version: 2
+```
+
+## Redis
+You might notice that each pod is keeping track of a different count. Let's push that
+state out to Redis instead.
+
+We need to create a new Redis `Service` and `Deployment`.
+
+```
+# cat redis.yaml
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - image: redis
+        name: redis
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - protocol: TCP
+    port: 6379
+    targetPort: 6379
+```
+
+Test that redis is running from our debug pod
+
+```
+nc redis 6379
+PING
++PONG
+```
+
+Now we can call redis from our app
+
+```go
+import (
+    "os"
+    "fmt"
+    "net/http"
+    "log"
+    "github.com/go-redis/redis"
+)
+
+var version = "2"
+func main() {
+	hostname, _ := os.Hostname()
+	client := redis.NewClient(&redis.Options{
+		Addr:     "redis:6379",
+	})
+
+	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		greeting := r.URL.Query().Get("greeting")
+
+		// increment the key by one
+		num, err := client.Incr(greeting).Result()
+		if err != nil {
+			w.WriteHeader(503)
+			fmt.Fprintf(w, err.Error())
+		}
+
+		fmt.Fprintf(w, "Hello, from %s!\nI have seen that greeting %d times.\nVersion: %s\n",
+			hostname,
+			num,
+			version,
+		)
+	})
+	log.Println("Starting server...")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+Compile the golang app, build a new docker image, tag it, and push it
+
+```
+GOOS=linux go build -o app .
+docker build -t lkysow/gcp-meetup:v2 .
+docker push lkysow/gcp-meetup:v2
+```
+
+Edit our `deployment.yaml` to use the `v2` image and then run
+
+```
+kubectl apply -f deployment.yaml
+```
+
+We should see a rolling deploy succeed and now the count should be the same across pods.
