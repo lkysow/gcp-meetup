@@ -41,13 +41,13 @@ func main() {
 
 Test it
 
-```
+```bash
 go run main.go
 2017/09/11 22:32:12 Starting server...
 ```
 
 In a new session
-```
+```bash
 curl localhost:8080/hello?greeting=hi
 Hello, from Lukes-Macbook-Pro.local!
 I have seen that greeting 0 times.
@@ -65,7 +65,7 @@ ENTRYPOINT ["./app"]
 
 Now we can build it
 
-```
+```bash
 docker build .
 Sending build context to Docker daemon  19.46kB
 Step 1/3 : FROM scratch
@@ -76,13 +76,13 @@ ADD failed: stat /var/lib/docker/tmp/docker-builder297947798/app: no such file o
 
 Ahh, of course we need to compile our app into a binary called `app`.
 
-```
+```bash
 GOOS=linux go build -o app .
 ```
 
 With our binary built, we can now build our Docker image
 
-```
+```bash
 docker build . -t lkysow/gcp-meetup
 Sending build context to Docker daemon  5.949MB
 Step 1/3 : FROM ubuntu
@@ -99,14 +99,14 @@ Successfully tagged lkysow/gcp-meetup:latest
 ```
 
 Let's run it!
-```
+```bash
 docker run -p 8080:8080 lkysow/gcp-meetup
 2017/09/12 05:45:34 Starting server...
 ```
 
 And test it
 
-```
+```bash
 curl localhost:8080/hello?greeting=hi
 Hello, from 2f9c7131495c!
 I have seen that greeting 0 times.
@@ -115,7 +115,7 @@ Version: 1
 
 Now let's push up that image to the Docker registry so Kubernetes can use it
 
-```
+```bash
 docker push lkysow/gcp-meetup
 The push refers to a repository [docker.io/lkysow/gcp-meetup]
 6be9681b14f4: Pushed
@@ -124,7 +124,7 @@ latest: digest: sha256:8e9925d8cc89a2d853d8bdfb8017eaadcb5de9cb3524484471e1c8eac
 
 ## Run it in Kubernetes as a Pod
 
-```
+```yaml
 # cat pod.yaml
 apiVersion: v1
 kind: Pod
@@ -138,27 +138,27 @@ spec:
 
 Tell Kubernetes to run it
 
-```
+```bash
 kubectl apply -f pod.yaml
 ```
 
 Look at the logs
 
-```
+```bash
 kubectl logs gcp-meetup
 2017/09/12 06:07:23 Starting server...
 ```
 
 Lets create a pod we can use to bounce to our Pod
 
-```
+```bash
 kubectl run --image markeijsermans/debug -it debug
 
 If you don't see a command prompt, try pressing enter.
 ```
 
 Get the IP address of our pod
-```
+```bash
 kubectl get pod -o wide
 NAME                    READY     STATUS    RESTARTS   AGE       IP         NODE
 debug-870039539-pqdxh   1/1       Running   0          1m        10.8.2.7   gke-cluster-1-default-pool-f2fb85a4-9n41
@@ -167,7 +167,7 @@ gcp-meetup              1/1       Running   0          3m        10.8.2.6   gke-
 
 From the debug pod, we should be able to curl our app
 
-```
+```bash
 (06:10 debug-870039539-pqdxh:/) curl 10.8.2.6:8080/hello
 Hello, from gcp-meetup
 I have seen that greeting 0 times.
@@ -179,7 +179,7 @@ It works!
 ## From Pod to Deployment
 Pods aren't self-healing and we can't run multiple replicas. We need a Deployment.
 
-```
+```yaml
 # cat deployment.yaml
 apiVersion: apps/v1beta1
 kind: Deployment
@@ -198,14 +198,14 @@ spec:
         imagePullPolicy: Always
 ```
 
-```
+```bash
 kubectl delete pod gcp-meetup
 kubectl apply -f deployment.yaml
 ```
 
 Now we have a deployment. We can delete the pod and it will come back up.
 
-```
+```bash
 kubectl delete pod gcp-meetup-1664252012-kh3cb
 kubectl get pod
 NAME                          READY     STATUS    RESTARTS   AGE
@@ -214,7 +214,7 @@ gcp-meetup-1664252012-kh3cb   1/1       Running   0          5s
 ```
 
 We can scale the deployment
-```
+```bash
 kubectl scale --replicas=3 deployment gcp-meetup
 deployment "gcp-meetup" scaled
 
@@ -229,13 +229,13 @@ gcp-meetup-1664252012-ld4zr   1/1       Running   0          5m
 ## Services
 That's great but we actually want to talk to our app!
 
-```
+```bash
 kubectl apply -f svc.yaml
 ```
 
 Now we can curl our app with the new DNS entry and it will load balance over our Pods.
 
-```
+```bash
 curl gcp-meetup/hello?greeting=bye
 Hello, from gcp-meetup-1883113546-qc4gz!
 I have seen that greeting 1805 times.
@@ -248,7 +248,7 @@ state out to Redis instead.
 
 We need to create a new Redis `Service` and `Deployment`.
 
-```
+```yaml
 # cat redis.yaml
 apiVersion: apps/v1beta1
 kind: Deployment
@@ -280,7 +280,7 @@ spec:
 
 Test that redis is running from our debug pod
 
-```
+```bash
 nc redis 6379
 PING
 +PONG
@@ -335,7 +335,7 @@ func main() {
 
 Compile the golang app, build a new docker image, tag it, and push it
 
-```
+```bash
 GOOS=linux go build -o app .
 docker build -t lkysow/gcp-meetup:v2 .
 docker push lkysow/gcp-meetup:v2
@@ -343,7 +343,7 @@ docker push lkysow/gcp-meetup:v2
 
 Edit our `deployment.yaml` to use the `v2` image and then run
 
-```
+```bash
 kubectl apply -f deployment.yaml
 ```
 
