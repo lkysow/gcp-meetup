@@ -6,3 +6,9 @@ spec:
   containers:
   - image: lkysow/gcp-meetup
     name: gcp-meetup
+    imagePullPolicy: Always
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
